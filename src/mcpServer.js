@@ -4,6 +4,22 @@ import { z } from 'zod';
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_CHARS = 5_000;
 
+export const createLoggedToolHandler = (toolName, handler) => async (args = {}) => {
+  const startedAt = Date.now();
+  console.log(`[mcp] tool call started: ${toolName}`);
+
+  try {
+    const result = await handler(args);
+    const durationMs = Date.now() - startedAt;
+    console.log(`[mcp] tool call succeeded: ${toolName} (${durationMs}ms)`);
+    return result;
+  } catch (error) {
+    const durationMs = Date.now() - startedAt;
+    console.error(`[mcp] tool call failed: ${toolName} (${durationMs}ms)`, error);
+    throw error;
+  }
+};
+
 export const currentDateTimeHandler = async ({ timeZone } = {}) => {
   const now = new Date();
   const resolvedTimeZone = timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -97,7 +113,7 @@ export const createMcpServer = () => {
         timeZone: z.string().optional().describe('Optional IANA timezone, e.g. Asia/Shanghai'),
       },
     },
-    currentDateTimeHandler,
+    createLoggedToolHandler('current_date_time', currentDateTimeHandler),
   );
 
   server.registerTool(
@@ -110,7 +126,7 @@ export const createMcpServer = () => {
         maxChars: z.number().int().min(1).max(20_000).default(DEFAULT_MAX_CHARS),
       },
     },
-    httpGetHandler,
+    createLoggedToolHandler('http_get', httpGetHandler),
   );
 
   return server;

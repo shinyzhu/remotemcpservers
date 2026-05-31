@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { currentDateTimeHandler, httpGetHandler } from './mcpServer.js';
+import { createLoggedToolHandler, currentDateTimeHandler, httpGetHandler } from './mcpServer.js';
 
 test('currentDateTimeHandler returns structured time output', async () => {
   const result = await currentDateTimeHandler();
@@ -47,4 +47,30 @@ test('httpGetHandler rejects non-http URL schemes', async () => {
     () => httpGetHandler({ url: 'file:///tmp/test.txt' }),
     /Only http and https URLs are supported/,
   );
+});
+
+test('createLoggedToolHandler logs tool call lifecycle for success', async (t) => {
+  const logs = [];
+  t.mock.method(console, 'log', (message) => logs.push(message));
+  t.mock.method(console, 'error', () => {});
+
+  const wrapped = createLoggedToolHandler('test_tool', async () => ({ content: [] }));
+  const result = await wrapped({});
+
+  assert.deepEqual(result, { content: [] });
+  assert.equal(logs[0], '[mcp] tool call started: test_tool');
+  assert.match(logs[1], /^\[mcp\] tool call succeeded: test_tool \(\d+ms\)$/);
+});
+
+test('createLoggedToolHandler logs tool call lifecycle for errors', async (t) => {
+  const errors = [];
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'error', (message) => errors.push(message));
+
+  const wrapped = createLoggedToolHandler('failing_tool', async () => {
+    throw new Error('boom');
+  });
+
+  await assert.rejects(() => wrapped({}), /boom/);
+  assert.match(errors[0], /^\[mcp\] tool call failed: failing_tool \(\d+ms\)$/);
 });
