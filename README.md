@@ -19,6 +19,13 @@ Server endpoints:
 - `POST /mcp` - MCP Streamable HTTP endpoint
 - `GET /health` - health check
 
-## Deploy to Cloudflare
+## Deploy to Cloudflare Workers
 
-This server is stateless and only requires `npm install` + `npm start`, which makes it straightforward to deploy behind Cloudflare (for example on a VM/container fronted by Cloudflare Tunnel or Cloudflare proxy).
+This repository includes a Worker entrypoint at `src/worker.js` and Wrangler config in `wrangler.toml`.
+
+```bash
+npm install
+npm run deploy:cloudflare
+```
+
+This avoids Cloudflare static-site auto detection and deploys as a Worker service.
