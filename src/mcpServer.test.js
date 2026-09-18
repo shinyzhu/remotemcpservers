@@ -42,7 +42,12 @@ test('httpGetHandler fetches URL and truncates long response body', async () => 
   }
 });
 
-test('httpGetHandler rejects non-http URL schemes', async () => {
+test('httpGetHandler rejects malformed and non-http URL schemes', async () => {
+  await assert.rejects(
+    () => httpGetHandler({ url: 'not a valid url' }),
+    /Invalid URL: not a valid url/,
+  );
+
   await assert.rejects(
     () => httpGetHandler({ url: 'file:///tmp/test.txt' }),
     /Only http and https URLs are supported/,

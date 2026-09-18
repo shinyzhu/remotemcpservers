@@ -47,25 +47,46 @@ export const currentDateTimeHandler = async ({ timeZone } = {}) => {
   };
 };
 
+export const parseHttpUrl = (url) => {
+  if (typeof url !== 'string' || url.trim() === '') {
+    throw new Error('A valid URL string is required.');
+  }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error(`Invalid URL: ${url}`);
+  }
+
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    throw new Error('Only http and https URLs are supported.');
+  }
+
+  return parsedUrl;
+};
+
 export const httpGetHandler = async ({
   url,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxChars = DEFAULT_MAX_CHARS,
 }) => {
-  const parsedUrl = new URL(url);
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    throw new Error('Only http and https URLs are supported.');
-  }
+  const parsedUrl = parseHttpUrl(url);
 
-  const response = await fetch(parsedUrl, {
-    method: 'GET',
-    redirect: 'follow',
-    signal: AbortSignal.timeout(timeoutMs),
-    headers: {
-      'user-agent': 'remotemcpservers/1.0',
-      accept: '*/*',
-    },
-  });
+  let response;
+  try {
+    response = await fetch(parsedUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: {
+        'user-agent': 'remotemcpservers/1.0',
+        accept: '*/*',
+      },
+    });
+  } catch (error) {
+    throw new Error(`Failed to fetch ${parsedUrl.toString()}: ${error.message}`);
+  }
 
   const body = await response.text();
   const truncated = body.length > maxChars;
