@@ -177,15 +177,7 @@ export const createApp = () => {
   const app = createMcpExpressApp({ host: '0.0.0.0' });
   app.use(express.json({ limit: '1mb' }));
 
-  app.get('/', (_req, res) => {
-    res.type('html').send(homePageHtml);
-  });
-
-  app.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'ok' });
-  });
-
-  app.post('/mcp', async (req, res) => {
+  const handleMcpRequest = async (req, res) => {
     const server = createMcpServer();
 
     try {
@@ -206,13 +198,33 @@ export const createApp = () => {
         res.status(500).json(INTERNAL_SERVER_ERROR);
       }
     }
+  };
+
+  app.get('/', (_req, res) => {
+    res.type('html').send(homePageHtml);
   });
+
+  app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
+  app.post('/', handleMcpRequest);
+  app.post('/mcp', handleMcpRequest);
+  app.post('/messages', handleMcpRequest);
 
   app.get('/mcp', (_req, res) => {
     res.status(405).json(METHOD_NOT_ALLOWED);
   });
 
+  app.get('/messages', (_req, res) => {
+    res.status(405).json(METHOD_NOT_ALLOWED);
+  });
+
   app.delete('/mcp', (_req, res) => {
+    res.status(405).json(METHOD_NOT_ALLOWED);
+  });
+
+  app.delete('/messages', (_req, res) => {
     res.status(405).json(METHOD_NOT_ALLOWED);
   });
 

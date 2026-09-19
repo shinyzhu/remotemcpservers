@@ -69,6 +69,39 @@ test('createApp serves a landing page with tool and connection details', async (
   assert.match(response.text, /connect/i);
 });
 
+test('createApp accepts root and messages endpoint aliases for MCP clients', async () => {
+  const app = createApp();
+
+  const rootResponse = await request(app)
+    .post('/')
+    .send({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1.0.0' },
+      },
+    });
+
+  const messagesResponse = await request(app)
+    .post('/messages')
+    .send({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1.0.0' },
+      },
+    });
+
+  assert.notEqual(rootResponse.status, 404);
+  assert.notEqual(messagesResponse.status, 404);
+});
+
 test('createLoggedToolHandler logs tool call lifecycle for success', async (t) => {
   const logs = [];
   t.mock.method(console, 'log', (message) => logs.push(message));

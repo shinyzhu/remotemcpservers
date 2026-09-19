@@ -30,12 +30,20 @@ const jsonResponse = (body, status = 200) =>
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+    const isMcpEndpoint = ['/', '/mcp', '/messages'].includes(url.pathname);
 
     if (url.pathname === '/health' && request.method === 'GET') {
       return jsonResponse({ status: 'ok' }, 200);
     }
 
-    if (url.pathname !== '/mcp') {
+    if (url.pathname === '/' && request.method === 'GET') {
+      return new Response(
+        `<!doctype html><html><body><h1>Remote MCP Servers</h1><p>Use POST /mcp or POST /messages for MCP requests.</p></body></html>`,
+        { headers: { 'content-type': 'text/html; charset=utf-8' } },
+      );
+    }
+
+    if (!isMcpEndpoint) {
       return new Response('Not Found', { status: 404 });
     }
 
