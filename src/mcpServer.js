@@ -130,9 +130,9 @@ export const createMcpServer = () => {
     'current_date_time',
     {
       description: 'Get the current date and time in ISO and localized formats.',
-      inputSchema: {
+      inputSchema: z.object({
         timeZone: z.string().optional().describe('Optional IANA timezone, e.g. Asia/Shanghai'),
-      },
+      }),
     },
     createLoggedToolHandler('current_date_time', currentDateTimeHandler),
   );
@@ -141,11 +141,11 @@ export const createMcpServer = () => {
     'http_get',
     {
       description: 'Fetch a URL with HTTP GET and return a preview of the response body.',
-      inputSchema: {
+      inputSchema: z.object({
         url: z.string().url().describe('Target URL to fetch over HTTP or HTTPS.'),
         timeoutMs: z.number().int().min(1_000).max(30_000).default(DEFAULT_TIMEOUT_MS),
         maxChars: z.number().int().min(1).max(20_000).default(DEFAULT_MAX_CHARS),
-      },
+      }),
     },
     createLoggedToolHandler('http_get', httpGetHandler),
   );

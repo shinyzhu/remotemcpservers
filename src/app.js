@@ -179,23 +179,29 @@ export const createApp = () => {
 
   const handleMcpRequest = async (req, res) => {
     const server = createMcpServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
 
     try {
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-      });
-
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
-
-      res.on('close', () => {
-        transport.close();
-        server.close();
-      });
     } catch (error) {
       console.error('Error handling MCP request:', error);
       if (!res.headersSent) {
         res.status(500).json(INTERNAL_SERVER_ERROR);
+      }
+    } finally {
+      // Clean up after response is sent
+      try {
+        transport.close();
+      } catch (closeError) {
+        console.error('Error closing transport:', closeError);
+      }
+      try {
+        await server.close();
+      } catch (closeError) {
+        console.error('Error closing server:', closeError);
       }
     }
   };

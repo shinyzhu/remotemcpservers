@@ -32,24 +32,28 @@ const REQUEST_TIMEOUT_MS = 25_000; // Cloudflare Workers have 30s limit
 export default {
   async fetch(request) {
     const url = new URL(request.url);
-    const isMcpEndpoint = ['/', '/mcp', '/messages'].includes(url.pathname);
+    const path = url.pathname;
 
-    if (url.pathname === '/health' && request.method === 'GET') {
+    // Health check
+    if (path === '/health' && request.method === 'GET') {
       return jsonResponse({ status: 'ok' }, 200);
     }
 
-    if (url.pathname === '/' && request.method === 'GET') {
+    // Homepage - only GET /
+    if (path === '/' && request.method === 'GET') {
       return new Response(
         `<!doctype html><html><body><h1>Remote MCP Servers</h1><p>Use POST /mcp or POST /messages for MCP requests.</p></body></html>`,
         { headers: { 'content-type': 'text/html; charset=utf-8' } },
       );
     }
 
+    // MCP endpoints: only POST allowed on /, /mcp, /messages
+    const isMcpEndpoint = ['/', '/mcp', '/messages'].includes(path);
     if (!isMcpEndpoint) {
       return new Response('Not Found', { status: 404 });
     }
 
-    if (!['GET', 'POST', 'DELETE'].includes(request.method)) {
+    if (request.method !== 'POST') {
       return jsonResponse(METHOD_NOT_ALLOWED, 405);
     }
 
@@ -66,8 +70,10 @@ export default {
     try {
       await server.connect(transport);
 
-      // Clone request if needed for body reading
+      // Clone request for safe body reading in Workers
       const clonedRequest = request.clone?.() || request;
+      
+      // Use Promise.race with timeout, but ensure request completes
       const response = await Promise.race([
         transport.handleRequest(clonedRequest),
         timeoutPromise,
@@ -78,11 +84,16 @@ export default {
       console.error('Error handling MCP request:', error.message || error);
       return jsonResponse(INTERNAL_SERVER_ERROR, 500);
     } finally {
+      // Clean up resources
       try {
         transport.close();
+      } catch (closeError) {
+        console.error('Error closing transport:', closeError);
+      }
+      try {
         await server.close();
-      } catch (cleanupError) {
-        console.error('Cleanup error:', cleanupError);
+      } catch (closeError) {
+        console.error('Error closing server:', closeError);
       }
     }
   },
