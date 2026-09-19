@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import request from 'supertest';
+import { createApp } from './app.js';
 import { createLoggedToolHandler, currentDateTimeHandler, httpGetHandler } from './mcpServer.js';
 
 test('currentDateTimeHandler returns structured time output', async () => {
@@ -52,6 +54,19 @@ test('httpGetHandler rejects malformed and non-http URL schemes', async () => {
     () => httpGetHandler({ url: 'file:///tmp/test.txt' }),
     /Only http and https URLs are supported/,
   );
+});
+
+test('createApp serves a landing page with tool and connection details', async () => {
+  const app = createApp();
+
+  const response = await request(app).get('/');
+
+  assert.equal(response.status, 200);
+  assert.match(response.text, /Remote MCP Servers/i);
+  assert.match(response.text, /current_date_time/i);
+  assert.match(response.text, /http_get/i);
+  assert.match(response.text, /POST \/mcp/i);
+  assert.match(response.text, /connect/i);
 });
 
 test('createLoggedToolHandler logs tool call lifecycle for success', async (t) => {
