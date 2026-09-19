@@ -27,6 +27,8 @@ const jsonResponse = (body, status = 200) =>
     },
   });
 
+const REQUEST_TIMEOUT_MS = 25_000; // Cloudflare Workers have 30s limit
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -51,6 +53,11 @@ export default {
       return jsonResponse(METHOD_NOT_ALLOWED, 405);
     }
 
+    // Wrap in timeout to prevent Worker from hanging
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout')), REQUEST_TIMEOUT_MS),
+    );
+
     const server = createMcpServer();
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -58,13 +65,25 @@ export default {
 
     try {
       await server.connect(transport);
-      return await transport.handleRequest(request);
+
+      // Clone request if needed for body reading
+      const clonedRequest = request.clone?.() || request;
+      const response = await Promise.race([
+        transport.handleRequest(clonedRequest),
+        timeoutPromise,
+      ]);
+
+      return response;
     } catch (error) {
-      console.error('Error handling MCP request:', error);
+      console.error('Error handling MCP request:', error.message || error);
       return jsonResponse(INTERNAL_SERVER_ERROR, 500);
     } finally {
-      transport.close();
-      await server.close();
+      try {
+        transport.close();
+        await server.close();
+      } catch (cleanupError) {
+        console.error('Cleanup error:', cleanupError);
+      }
     }
   },
 };
