@@ -22,47 +22,56 @@ const INTERNAL_SERVER_ERROR = {
 const jsonResponse = (body, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-    },
+    headers: { 'content-type': 'application/json; charset=utf-8' },
   });
 
-const REQUEST_TIMEOUT_MS = 25_000; // Cloudflare Workers have 30s limit
+// Cloudflare Workers have a 30 s CPU-time limit; leave a 5 s margin.
+const REQUEST_TIMEOUT_MS = 25_000;
+
+const MCP_PATHS = new Set(['/mcp', '/messages']);
 
 export default {
   async fetch(request) {
-    const url = new URL(request.url);
-    const path = url.pathname;
+    const { pathname } = new URL(request.url);
 
-    // Health check
-    if (path === '/health' && request.method === 'GET') {
-      return jsonResponse({ status: 'ok' }, 200);
+    if (pathname === '/health' && request.method === 'GET') {
+      return jsonResponse({ status: 'ok' });
     }
 
-    // Homepage - only GET /
-    if (path === '/' && request.method === 'GET') {
-      return new Response(homePageHtml, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    if (pathname === '/' && request.method === 'GET') {
+      return new Response(homePageHtml, {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
     }
 
-    // MCP endpoints: GET (SSE), POST, DELETE allowed on /mcp, /messages; POST only on /
-    const isMcpPostEndpoint = path === '/';
-    const isMcpEndpoint = ['/mcp', '/messages'].includes(path);
-    if (!isMcpEndpoint && !isMcpPostEndpoint) {
+    // Stateless MCP: accept POST on /, /mcp, /messages.
+    // For /mcp and /messages also pass GET and DELETE to the transport so it
+    // can return the correct MCP error response (405 in stateless mode).
+    const isMcpRoot = pathname === '/';
+    const isMcpPath = MCP_PATHS.has(pathname);
+
+    if (!isMcpRoot && !isMcpPath) {
       return new Response('Not Found', { status: 404 });
     }
 
-    if (isMcpPostEndpoint && request.method !== 'POST') {
+    // Root alias only supports POST.
+    if (isMcpRoot && request.method !== 'POST') {
       return jsonResponse(METHOD_NOT_ALLOWED, 405);
     }
 
-    if (isMcpEndpoint && !['GET', 'POST', 'DELETE'].includes(request.method)) {
+    // /mcp and /messages: allow POST, GET (SSE), DELETE (session teardown);
+    // the transport returns the appropriate response for each in stateless mode.
+    if (isMcpPath && !['GET', 'POST', 'DELETE'].includes(request.method)) {
       return jsonResponse(METHOD_NOT_ALLOWED, 405);
     }
 
-    // Wrap in timeout to prevent Worker from hanging
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Request timeout')), REQUEST_TIMEOUT_MS),
-    );
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error('Request timed out')),
+        REQUEST_TIMEOUT_MS,
+      );
+    });
 
     const server = createMcpServer();
     const transport = new WebStandardStreamableHTTPServerTransport({
@@ -72,31 +81,20 @@ export default {
     try {
       await server.connect(transport);
 
-      // Clone request for safe body reading in Workers
-      const clonedRequest = request.clone?.() || request;
-      
-      // Use Promise.race with timeout, but ensure request completes
       const response = await Promise.race([
-        transport.handleRequest(clonedRequest),
+        transport.handleRequest(request),
         timeoutPromise,
       ]);
 
+      clearTimeout(timeoutId);
       return response;
     } catch (error) {
-      console.error('Error handling MCP request:', error.message || error);
+      clearTimeout(timeoutId);
+      console.error('MCP request error:', error.message ?? error);
       return jsonResponse(INTERNAL_SERVER_ERROR, 500);
     } finally {
-      // Clean up resources
-      try {
-        transport.close();
-      } catch (closeError) {
-        console.error('Error closing transport:', closeError);
-      }
-      try {
-        await server.close();
-      } catch (closeError) {
-        console.error('Error closing server:', closeError);
-      }
+      try { transport.close(); } catch { /* ignore */ }
+      try { await server.close(); } catch { /* ignore */ }
     }
   },
 };
