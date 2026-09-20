@@ -44,13 +44,18 @@ export default {
       return new Response(homePageHtml, { headers: { 'content-type': 'text/html; charset=utf-8' } });
     }
 
-    // MCP endpoints: only POST allowed on /, /mcp, /messages
-    const isMcpEndpoint = ['/', '/mcp', '/messages'].includes(path);
-    if (!isMcpEndpoint) {
+    // MCP endpoints: GET (SSE), POST, DELETE allowed on /mcp, /messages; POST only on /
+    const isMcpPostEndpoint = path === '/';
+    const isMcpEndpoint = ['/mcp', '/messages'].includes(path);
+    if (!isMcpEndpoint && !isMcpPostEndpoint) {
       return new Response('Not Found', { status: 404 });
     }
 
-    if (request.method !== 'POST') {
+    if (isMcpPostEndpoint && request.method !== 'POST') {
+      return jsonResponse(METHOD_NOT_ALLOWED, 405);
+    }
+
+    if (isMcpEndpoint && !['GET', 'POST', 'DELETE'].includes(request.method)) {
       return jsonResponse(METHOD_NOT_ALLOWED, 405);
     }
 
