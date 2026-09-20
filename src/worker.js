@@ -1,5 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { createMcpServer } from './mcpServer.js';
+import { createMcpServer, homePageHtml } from './mcpServer.js';
 
 const METHOD_NOT_ALLOWED = {
   jsonrpc: '2.0',
@@ -41,10 +41,7 @@ export default {
 
     // Homepage - only GET /
     if (path === '/' && request.method === 'GET') {
-      return new Response(
-        `<!doctype html><html><body><h1>Remote MCP Servers</h1><p>Use POST /mcp or POST /messages for MCP requests.</p></body></html>`,
-        { headers: { 'content-type': 'text/html; charset=utf-8' } },
-      );
+      return new Response(homePageHtml, { headers: { 'content-type': 'text/html; charset=utf-8' } });
     }
 
     // MCP endpoints: only POST allowed on /, /mcp, /messages
